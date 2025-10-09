@@ -94,6 +94,7 @@ public class MessageServer implements Runnable {
         AppendEntriesResponse resp;
 
         synchronized (nodeState) {
+            // If RPC's term is higher, update local term and become follower
             if (append.getTerm() > nodeState.getCurrentTerm()) {
                 nodeState.setCurrentTerm(append.getTerm());
                 nodeState.setVotedFor(null);
@@ -103,26 +104,22 @@ public class MessageServer implements Runnable {
             boolean success = false;
             int matchIndex = 0;
 
-            // Basic consistency check
-            int prevIdx = append.getPrevLogIndex();
-            int prevTerm = append.getPrevLogTerm();
-            boolean consistent = (prevIdx == 0 || prevIdx <= nodeState.getLastLogIndex());
-
-            if (append.getTerm() >= nodeState.getCurrentTerm() && consistent) {
-                if (append.getEntries() != null && !append.getEntries().isEmpty()) {
-                    nodeState.appendEntries(prevIdx, append.getEntries(), append.getTerm());
-                }
-
-                nodeState.setCommitIndex(append.getLeaderCommit());
-                success = true;
-                matchIndex = nodeState.getLastLogIndex();
-                nodeState.setRole(NodeRole.FOLLOWER);
-
-                // Reset election timer
-                if (nodeTimers != null) nodeTimers.resetElectionTimeout();
-            } else {
+            // If leader's term is older, reject quickly
+            if (append.getTerm() < nodeState.getCurrentTerm()) {
                 success = false;
                 matchIndex = nodeState.getLastLogIndex();
+            } else {
+                // Use NodeState's appendEntriesWithConsistency which checks prevLogIndex/prevLogTerm
+                success = nodeState.appendEntriesWithConsistency(append);
+                if (success) {
+                    matchIndex = nodeState.getLastLogIndex();
+                    nodeState.setRole(NodeRole.FOLLOWER);
+                    // Reset election timer on valid AppendEntries from leader
+                    if (nodeTimers != null) nodeTimers.resetElectionTimeout();
+                } else {
+                    // conflict: keep matchIndex as last known index
+                    matchIndex = nodeState.getLastLogIndex();
+                }
             }
 
             resp = new AppendEntriesResponse(nodeState.getCurrentTerm(), success, matchIndex);

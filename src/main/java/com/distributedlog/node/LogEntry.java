@@ -1,7 +1,8 @@
 package com.distributedlog.node;
 
 /**
- * Simple log entry for replication.
+ * Simple log entry: stores term and command.
+ * We don't store explicit index here because NodeState treats log index as position (1-based).
  */
 public class LogEntry {
     private final int term;
@@ -12,8 +13,13 @@ public class LogEntry {
         this.command = command;
     }
 
-    public int getTerm() { return term; }
-    public String getCommand() { return command; }
+    public int getTerm() {
+        return term;
+    }
+
+    public String getCommand() {
+        return command;
+    }
 
     @Override
     public String toString() {

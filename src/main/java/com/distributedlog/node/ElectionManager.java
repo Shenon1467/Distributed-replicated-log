@@ -1,19 +1,23 @@
 package com.distributedlog.node;
 
 import com.distributedlog.messages.AppendEntries;
+import com.distributedlog.messages.AppendEntriesResponse;
 import com.distributedlog.messages.RequestVote;
 import com.distributedlog.network.MessageClient;
+import com.google.gson.Gson;
 
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ElectionManager {
     private final NodeState nodeState;
     private final int selfPort;
     private final List<Integer> peerPorts;
-    private Timer heartbeatTimer;
+    private final Map<Integer, Integer> nextIndex = new ConcurrentHashMap<>();
+    private final Map<Integer, Integer> matchIndex = new ConcurrentHashMap<>();
+    private ScheduledExecutorService leaderScheduler;
+    private final Gson gson = new Gson();
 
     public ElectionManager(NodeState nodeState, int selfPort, List<Integer> peerPorts) {
         this.nodeState = nodeState;
@@ -21,9 +25,7 @@ public class ElectionManager {
         this.peerPorts = peerPorts;
     }
 
-    // -------------------------------------------
-    // PHASE 2: Leader Election Logic
-    // -------------------------------------------
+    // --- Election (unchanged) ---
     public void startElection() {
         synchronized (nodeState) {
             nodeState.incrementTerm();
@@ -35,14 +37,13 @@ public class ElectionManager {
 
         RequestVote voteRequest = new RequestVote(nodeState.getCurrentTerm(), "Self");
 
-        AtomicInteger votesGranted = new AtomicInteger(1); // self vote
+        AtomicInteger votesGranted = new AtomicInteger(1); // vote for self
         int majority = (peerPorts.size() + 1) / 2 + 1;
 
         for (int port : peerPorts) {
             new Thread(() -> {
                 try {
                     String responseJson = MessageClient.sendMessage("localhost", port, voteRequest);
-
                     if (responseJson != null && responseJson.contains("\"voteGranted\":true")) {
                         int granted = votesGranted.incrementAndGet();
                         System.out.println("[Election] Vote granted by node on port " + port + ". Total: " + granted);
@@ -51,7 +52,7 @@ public class ElectionManager {
                             if (granted >= majority && nodeState.getRole() == NodeRole.CANDIDATE) {
                                 nodeState.setRole(NodeRole.LEADER);
                                 System.out.println("[Election] Node became LEADER for term " + nodeState.getCurrentTerm());
-                                startHeartbeat();
+                                becomeLeader();
                             }
                         }
                     }
@@ -62,48 +63,139 @@ public class ElectionManager {
         }
     }
 
-    // -------------------------------------------
-    // PHASE 3 - COMPONENT 6: Heartbeat & Leader Logic
-    // -------------------------------------------
-    private void startHeartbeat() {
-        if (heartbeatTimer != null) {
-            heartbeatTimer.cancel();
-        }
-        heartbeatTimer = new Timer(true);
+    // Called when candidate becomes leader
+    private void becomeLeader() {
+        System.out.println("[Leader] Initializing leader state for term " + nodeState.getCurrentTerm());
 
-        // send heartbeats periodically (every 1s)
-        heartbeatTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                synchronized (nodeState) {
-                    if (nodeState.getRole() != NodeRole.LEADER) {
-                        heartbeatTimer.cancel();
-                        return;
-                    }
+        synchronized (nodeState) {
+            int lastIndex = nodeState.getLastLogIndex();
+            for (int p : peerPorts) {
+                nextIndex.put(p, lastIndex + 1);
+                matchIndex.put(p, 0);
+            }
+        }
+
+        startLeaderSchedule();
+    }
+
+    private void startLeaderSchedule() {
+        if (leaderScheduler != null && !leaderScheduler.isShutdown()) {
+            leaderScheduler.shutdownNow();
+        }
+        leaderScheduler = Executors.newSingleThreadScheduledExecutor();
+        leaderScheduler.scheduleAtFixedRate(this::sendHeartbeatsAndReplicate, 0, 500, TimeUnit.MILLISECONDS);
+    }
+
+    /** Heartbeat + replication loop */
+    private void sendHeartbeatsAndReplicate() {
+        // for each peer send AppendEntries that may contain entries (if leader has new ones)
+        for (int peer : peerPorts) {
+            CompletableFuture.runAsync(() -> sendAppendEntriesToPeer(peer));
+        }
+    }
+
+    /** Send AppendEntries to a single peer, possibly including entries starting from nextIndex[peer] */
+    private void sendAppendEntriesToPeer(int peerPort) {
+        int nextIdx = nextIndex.getOrDefault(peerPort, 1);
+        int prevIndex = Math.max(0, nextIdx - 1);
+        int prevTerm;
+        List<String> entriesToSend = null; // null => heartbeat
+        int leaderCommit;
+        synchronized (nodeState) {
+            prevTerm = nodeState.getTermAtIndex(prevIndex);
+            int lastIndex = nodeState.getLastLogIndex();
+            if (nextIdx <= lastIndex) {
+                // send entries from nextIdx..lastIndex
+                entriesToSend = nodeState.getCommandsFromTo(nextIdx, lastIndex);
+            }
+            leaderCommit = nodeState.getCommitIndex();
+        }
+
+        AppendEntries ae = new AppendEntries(nodeState.getCurrentTerm(),
+                "Leader" + selfPort,
+                prevIndex,
+                prevTerm,
+                entriesToSend,
+                leaderCommit);
+
+        try {
+            String respJson = MessageClient.sendMessage("localhost", peerPort, ae);
+            if (respJson == null) return;
+
+            AppendEntriesResponse resp = new Gson().fromJson(respJson, AppendEntriesResponse.class);
+
+            synchronized (nodeState) {
+                // If follower has higher term, step down
+                if (resp.getTerm() > nodeState.getCurrentTerm()) {
+                    nodeState.setCurrentTerm(resp.getTerm());
+                    nodeState.setRole(NodeRole.FOLLOWER);
+                    stopLeaderScheduler();
+                    return;
                 }
 
-                AppendEntries heartbeat = new AppendEntries(
-                        nodeState.getCurrentTerm(),
-                        "Leader" + selfPort,
-                        nodeState.getLastLogIndex(),
-                        nodeState.getLastLogTerm(),
-                        null, // no log entries (heartbeat only)
-                        nodeState.getCommitIndex()
-                );
+                if (resp.isSuccess()) {
+                    int matched = resp.getMatchIndex();
+                    nextIndex.put(peerPort, matched + 1);
+                    matchIndex.put(peerPort, matched);
+                } else {
+                    // follower rejected — decrement nextIndex (backoff) and retry later
+                    int ni = Math.max(1, nextIndex.getOrDefault(peerPort, 1) - 1);
+                    nextIndex.put(peerPort, ni);
+                }
 
-                for (int port : peerPorts) {
-                    new Thread(() -> {
-                        try {
-                            String response = MessageClient.sendMessage("localhost", port, heartbeat);
-                            if (response != null && response.contains("\"success\":true")) {
-                                System.out.println("[Heartbeat] ACK from follower on port " + port);
-                            }
-                        } catch (Exception e) {
-                            System.out.println("[Heartbeat] Failed to contact follower on port " + port);
-                        }
-                    }).start();
+                // Try to advance commit index (basic majority check)
+                tryAdvanceCommitIndex();
+            }
+        } catch (Exception e) {
+            System.out.println("[Leader] append to " + peerPort + " failed: " + e.getMessage());
+        }
+    }
+
+    private void tryAdvanceCommitIndex() {
+        int lastIndex;
+        synchronized (nodeState) {
+            lastIndex = nodeState.getLastLogIndex();
+        }
+        int majority = (peerPorts.size() + 1) / 2 + 1;
+
+        for (int N = lastIndex; N > nodeState.getCommitIndex(); N--) {
+            final int target = N;
+            int count = 1; // leader itself
+            for (int p : peerPorts) {
+                int mk = matchIndex.getOrDefault(p, 0);
+                if (mk >= target) count++;
+            }
+
+            if (count >= majority) {
+                // ensure entry at N was created in current term (safety)
+                int termAtN;
+                synchronized (nodeState) {
+                    termAtN = nodeState.getTermAtIndex(target);
+                }
+                if (termAtN == nodeState.getCurrentTerm()) {
+                    // advance commit index
+                    System.out.println("[Leader] Advancing commitIndex to " + target);
+                    nodeState.setCommitIndex(target);
+                    break;
                 }
             }
-        }, 0, 1000); // every 1 second
+        }
+    }
+
+    private void stopLeaderScheduler() {
+        if (leaderScheduler != null) {
+            leaderScheduler.shutdownNow();
+            leaderScheduler = null;
+        }
+    }
+
+    /** Called by external client to append a new command to leader's log */
+    public void appendCommandAsLeader(String command) {
+        synchronized (nodeState) {
+            int term = nodeState.getCurrentTerm();
+            // prevLogIndex should be last log index; we append by passing prevLogIndex = lastIndex
+            nodeState.appendEntries(nodeState.getLastLogIndex(), Collections.singletonList(command), term);
+        }
+        // replication will happen on next heartbeat cycle
     }
 }

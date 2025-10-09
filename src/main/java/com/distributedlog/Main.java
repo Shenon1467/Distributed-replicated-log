@@ -19,7 +19,7 @@ public class Main {
             List<Integer> peers = nodePorts.stream().filter(p -> p != port).toList();
 
             // Create NodeState, ElectionManager, NodeTimers for each node
-            NodeState nodeState = new NodeState();
+            NodeState nodeState = new NodeState("Node" + port);
             ElectionManager electionManager = new ElectionManager(nodeState, port, peers);
             NodeTimers nodeTimers = new NodeTimers(nodeState, electionManager);
 
