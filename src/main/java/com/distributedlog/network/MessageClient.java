@@ -1,31 +1,32 @@
 package com.distributedlog.network;
 
-import com.google.gson.Gson;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.*;
 import java.net.Socket;
 
 public class MessageClient {
-    private static final Gson gson = new Gson();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Send a message (object will be converted to JSON) and return the raw JSON response (or null on error).
-     */
-    public static String sendMessageWithResponse(String host, int port, Object message) {
+    // Send a message object as JSON and return the JSON response
+    public static String sendMessage(String host, int port, Object messageObject) {
         try (Socket socket = new Socket(host, port);
-             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()))
-        ) {
-            String json = gson.toJson(message);
-            out.println(json);
+             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+             BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            // read single-line response JSON (server will reply)
-            String response = in.readLine();
-            System.out.println("[Client] Sent message: " + json);
-            System.out.println("[Client] Received response: " + response);
-            return response;
+            // Convert object to JSON
+            String json = objectMapper.writeValueAsString(messageObject);
+
+            // Send message
+            writer.write(json);
+            writer.newLine();
+            writer.flush();
+
+            // Read response
+            return reader.readLine();
+
         } catch (IOException e) {
-            e.printStackTrace();
+            System.err.println("[Client] Connection error to " + host + ":" + port + " -> " + e.getMessage());
             return null;
         }
     }

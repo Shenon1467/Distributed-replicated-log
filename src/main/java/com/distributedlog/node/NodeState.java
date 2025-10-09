@@ -1,37 +1,26 @@
 package com.distributedlog.node;
 
 public class NodeState {
-    private int currentTerm = 0;         // Current term number
-    private String votedFor = null;      // Candidate voted for in this term
-    private NodeRole role = NodeRole.FOLLOWER; // Initial role
+    private int currentTerm = 0;
+    private String votedFor = null;
+    private NodeRole role = NodeRole.FOLLOWER;
 
-    // Thread-safe getters/setters
-    public synchronized int getCurrentTerm() {
-        return currentTerm;
-    }
+    public synchronized int getCurrentTerm() { return currentTerm; }
 
-    public synchronized void setCurrentTerm(int currentTerm) {
-        this.currentTerm = currentTerm;
-    }
+    public synchronized void setCurrentTerm(int term) { this.currentTerm = term; }  // <-- add this
 
-    public synchronized String getVotedFor() {
-        return votedFor;
-    }
+    public synchronized void incrementTerm() { currentTerm++; }
 
-    public synchronized void setVotedFor(String votedFor) {
-        this.votedFor = votedFor;
-    }
+    public synchronized String getVotedFor() { return votedFor; }
 
-    public synchronized NodeRole getRole() {
-        return role;
-    }
+    public synchronized void setVotedFor(String votedFor) { this.votedFor = votedFor; }
 
-    public synchronized void setRole(NodeRole role) {
-        this.role = role;
-    }
+    public synchronized NodeRole getRole() { return role; }
+
+    public synchronized void setRole(NodeRole role) { this.role = role; }
 
     @Override
-    public synchronized String toString() {
+    public String toString() {
         return "NodeState{" +
                 "term=" + currentTerm +
                 ", votedFor='" + votedFor + '\'' +
