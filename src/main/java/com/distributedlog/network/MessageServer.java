@@ -41,70 +41,11 @@ public class MessageServer implements Runnable {
                     if (message != null) {
                         System.out.println("[Server " + port + "] Received: " + message);
 
-                        // ---------- RequestVote handling (Follower behavior) ----------
                         if (message.contains("candidateId")) {
-                            RequestVote vote = gson.fromJson(message, RequestVote.class);
-                            RequestVoteResponse resp;
-
-                            synchronized (nodeState) {
-                                // If RPC term > currentTerm, update term and step down to follower
-                                if (vote.getTerm() > nodeState.getCurrentTerm()) {
-                                    nodeState.setCurrentTerm(vote.getTerm());
-                                    nodeState.setVotedFor(null); // reset vote for new term
-                                    nodeState.setRole(NodeRole.FOLLOWER);
-                                }
-
-                                boolean grant = false;
-                                // Only grant vote if candidate's term == currentTerm (or higher) and hasn't voted yet
-                                if (vote.getTerm() >= nodeState.getCurrentTerm()) {
-                                    String votedFor = nodeState.getVotedFor();
-                                    if (votedFor == null || votedFor.equals(vote.getCandidateId())) {
-                                        // Note: we do NOT yet check log up-to-date (no log implemented in Phase 1)
-                                        nodeState.setVotedFor(vote.getCandidateId());
-                                        grant = true;
-                                    }
-                                } else {
-                                    grant = false;
-                                }
-
-                                resp = new RequestVoteResponse(nodeState.getCurrentTerm(), grant);
-                                System.out.println("[Server " + port + "] RequestVote -> grant=" + grant + ", nodeState=" + nodeState);
-                            }
-
-                            // send response JSON
-                            out.println(gson.toJson(resp));
-                        }
-
-                        // ---------- AppendEntries handling (heartbeat) ----------
-                        else if (message.contains("leaderId")) {
-                            AppendEntries append = gson.fromJson(message, AppendEntries.class);
-                            AppendEntriesResponse resp;
-
-                            synchronized (nodeState) {
-                                // If leader's term is greater, update our term and become follower
-                                if (append.getTerm() > nodeState.getCurrentTerm()) {
-                                    nodeState.setCurrentTerm(append.getTerm());
-                                    nodeState.setVotedFor(null);
-                                }
-
-                                // If leader's term is >= ours, accept heartbeat and reset election timer
-                                boolean success = false;
-                                if (append.getTerm() >= nodeState.getCurrentTerm()) {
-                                    nodeState.setRole(NodeRole.FOLLOWER);
-                                    success = true;
-
-                                    // reset election timer because follower heard from leader
-                                    if (nodeTimers != null) {
-                                        nodeTimers.resetElectionTimeout();
-                                    }
-                                }
-                                resp = new AppendEntriesResponse(nodeState.getCurrentTerm(), success);
-                                System.out.println("[Server " + port + "] AppendEntries -> success=" + success + ", nodeState=" + nodeState);
-                            }
-
-                            out.println(gson.toJson(resp));
+                            handleRequestVote(message, out);
+                        } else if (message.contains("leaderId")) {
+                            handleAppendEntries(message, out);
                         } else {
-                            // Unknown message type - reply with simple nack JSON or nothing
                             out.println("{}");
                         }
                     }
@@ -117,5 +58,77 @@ public class MessageServer implements Runnable {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    // ------------------ Handle RequestVote RPC ------------------
+    private void handleRequestVote(String message, PrintWriter out) {
+        RequestVote vote = gson.fromJson(message, RequestVote.class);
+        RequestVoteResponse resp;
+
+        synchronized (nodeState) {
+            if (vote.getTerm() > nodeState.getCurrentTerm()) {
+                nodeState.setCurrentTerm(vote.getTerm());
+                nodeState.setVotedFor(null);
+                nodeState.setRole(NodeRole.FOLLOWER);
+            }
+
+            boolean grant = false;
+            if (vote.getTerm() >= nodeState.getCurrentTerm()) {
+                String votedFor = nodeState.getVotedFor();
+                if (votedFor == null || votedFor.equals(vote.getCandidateId())) {
+                    nodeState.setVotedFor(vote.getCandidateId());
+                    grant = true;
+                }
+            }
+
+            resp = new RequestVoteResponse(nodeState.getCurrentTerm(), grant);
+            System.out.println("[Server " + port + "] RequestVote -> grant=" + grant + ", nodeState=" + nodeState);
+        }
+
+        out.println(gson.toJson(resp));
+    }
+
+    // ------------------ Handle AppendEntries RPC ------------------
+    private void handleAppendEntries(String message, PrintWriter out) {
+        AppendEntries append = gson.fromJson(message, AppendEntries.class);
+        AppendEntriesResponse resp;
+
+        synchronized (nodeState) {
+            if (append.getTerm() > nodeState.getCurrentTerm()) {
+                nodeState.setCurrentTerm(append.getTerm());
+                nodeState.setVotedFor(null);
+                nodeState.setRole(NodeRole.FOLLOWER);
+            }
+
+            boolean success = false;
+            int matchIndex = 0;
+
+            // Basic consistency check
+            int prevIdx = append.getPrevLogIndex();
+            int prevTerm = append.getPrevLogTerm();
+            boolean consistent = (prevIdx == 0 || prevIdx <= nodeState.getLastLogIndex());
+
+            if (append.getTerm() >= nodeState.getCurrentTerm() && consistent) {
+                if (append.getEntries() != null && !append.getEntries().isEmpty()) {
+                    nodeState.appendEntries(prevIdx, append.getEntries(), append.getTerm());
+                }
+
+                nodeState.setCommitIndex(append.getLeaderCommit());
+                success = true;
+                matchIndex = nodeState.getLastLogIndex();
+                nodeState.setRole(NodeRole.FOLLOWER);
+
+                // Reset election timer
+                if (nodeTimers != null) nodeTimers.resetElectionTimeout();
+            } else {
+                success = false;
+                matchIndex = nodeState.getLastLogIndex();
+            }
+
+            resp = new AppendEntriesResponse(nodeState.getCurrentTerm(), success, matchIndex);
+            System.out.println("[Server " + port + "] AppendEntries -> success=" + success + ", nodeState=" + nodeState);
+        }
+
+        out.println(gson.toJson(resp));
     }
 }
