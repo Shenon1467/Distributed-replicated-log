@@ -1,16 +1,19 @@
 package com.distributedlog.node;
 
 import com.distributedlog.messages.AppendEntries;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.lang.reflect.Type;
+import java.util.*;
 
 /**
  * NodeState keeps currentTerm, votedFor, role, and a local log.
  * Log uses 1-based indexing semantics: first entry has index 1; log.size() is last index.
  * Also tracks leader replication state (nextIndex, matchIndex) for log replication.
+ *
+ * Now includes persistence support (Component 8).
  */
 public class NodeState {
     private final String nodeId;       // Unique ID of this node
@@ -27,9 +30,18 @@ public class NodeState {
     private final Map<String, Integer> nextIndex = new HashMap<>();
     private final Map<String, Integer> matchIndex = new HashMap<>();
 
+    // --- Persistence ---
+    private final File storageDir;
+
     // --- Constructor (nodeId required) ---
     public NodeState(String nodeId) {
         this.nodeId = nodeId;
+
+        // Persistence setup
+        this.storageDir = new File("data/" + nodeId);
+        if (!storageDir.exists()) storageDir.mkdirs();
+
+        loadState(); // Try to load state from disk
     }
 
     // --- Node ID accessor ---
@@ -39,10 +51,19 @@ public class NodeState {
 
     // --- term / role / vote accessors ---
     public synchronized int getCurrentTerm() { return currentTerm; }
-    public synchronized void setCurrentTerm(int term) { this.currentTerm = term; }
-    public synchronized void incrementTerm() { this.currentTerm++; }
+    public synchronized void setCurrentTerm(int term) {
+        this.currentTerm = term;
+        saveState();
+    }
+    public synchronized void incrementTerm() {
+        this.currentTerm++;
+        saveState();
+    }
     public synchronized String getVotedFor() { return votedFor; }
-    public synchronized void setVotedFor(String votedFor) { this.votedFor = votedFor; }
+    public synchronized void setVotedFor(String votedFor) {
+        this.votedFor = votedFor;
+        saveState();
+    }
     public synchronized NodeRole getRole() { return role; }
     public synchronized void setRole(NodeRole role) { this.role = role; }
 
@@ -100,6 +121,8 @@ public class NodeState {
                 log.add(new LogEntry(termOfEntry, cmd));
             }
         }
+
+        saveState(); // Persist new log entries
     }
 
     // --- commit / apply logic ---
@@ -108,6 +131,7 @@ public class NodeState {
         if (newCommitIndex > commitIndex) {
             commitIndex = Math.min(newCommitIndex, log.size());
             applyCommittedEntries();
+            saveState();
         }
     }
 
@@ -159,6 +183,70 @@ public class NodeState {
             if (count > (matchIndex.size() + 1) / 2 && getTermAtIndex(i) == currentTerm) {
                 setCommitIndex(i);
             }
+        }
+    }
+
+    // --- Persistence Methods ---
+    private synchronized void saveState() {
+        try {
+            Gson gson = new Gson();
+
+            // Save metadata safely (allow nulls)
+            File stateFile = new File(storageDir, "state.json");
+            Map<String, Object> stateMap = new HashMap<>();
+            stateMap.put("currentTerm", currentTerm);
+            stateMap.put("votedFor", votedFor); // may be null, safe in HashMap
+
+            try (Writer writer = new FileWriter(stateFile)) {
+                gson.toJson(stateMap, writer);
+            }
+
+            // Save log
+            File logFile = new File(storageDir, "log.json");
+            try (Writer writer = new FileWriter(logFile)) {
+                gson.toJson(log, writer);
+            }
+
+            System.out.println("[Persistence] State saved for " + nodeId +
+                    " (term=" + currentTerm + ", logSize=" + log.size() + ")");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private synchronized void loadState() {
+        try {
+            Gson gson = new Gson();
+
+            // Load metadata
+            File stateFile = new File(storageDir, "state.json");
+            if (stateFile.exists()) {
+                try (Reader reader = new FileReader(stateFile)) {
+                    Type type = new TypeToken<Map<String, Object>>() {}.getType();
+                    Map<String, Object> data = gson.fromJson(reader, type);
+
+                    // Check for null (empty file)
+                    if (data != null) {
+                        currentTerm = ((Double) data.getOrDefault("currentTerm", 0.0)).intValue();
+                        votedFor = (String) data.getOrDefault("votedFor", null);
+                    }
+                }
+            }
+
+            // Load log
+            File logFile = new File(storageDir, "log.json");
+            if (logFile.exists()) {
+                try (Reader reader = new FileReader(logFile)) {
+                    Type listType = new TypeToken<List<LogEntry>>() {}.getType();
+                    List<LogEntry> loaded = gson.fromJson(reader, listType);
+                    if (loaded != null) log.addAll(loaded);
+                }
+            }
+
+            System.out.println("[Persistence] Loaded state for " + nodeId +
+                    " (term=" + currentTerm + ", logSize=" + log.size() + ")");
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
