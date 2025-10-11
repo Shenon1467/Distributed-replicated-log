@@ -13,13 +13,16 @@ import java.util.*;
  * Log uses 1-based indexing semantics: first entry has index 1; log.size() is last index.
  * Also tracks leader replication state (nextIndex, matchIndex) for log replication.
  *
- * Now includes persistence support (Component 8).
+ * Now includes persistence support (Component 8) and leader tracking for client redirection.
  */
 public class NodeState {
     private final String nodeId;       // Unique ID of this node
     private int currentTerm = 0;
     private String votedFor = null;
     private NodeRole role = NodeRole.FOLLOWER;
+
+    // --- Leader tracking ---
+    private String leaderId = null;    // current leader of the cluster
 
     // Log + replication state
     private final List<LogEntry> log = new ArrayList<>();
@@ -65,7 +68,22 @@ public class NodeState {
         saveState();
     }
     public synchronized NodeRole getRole() { return role; }
-    public synchronized void setRole(NodeRole role) { this.role = role; }
+    public synchronized void setRole(NodeRole role) {
+        this.role = role;
+        //if this node is now leader, set leaderid to self
+        if (role == NodeRole.LEADER) {
+        this.leaderId = this.nodeId;
+        }
+        saveState();
+    }
+
+    // --- Leader accessors ---
+    public synchronized String getLeaderId() {
+        return leaderId;
+    }
+    public synchronized void setLeaderId(String leaderId) {
+        this.leaderId = leaderId;
+    }
 
     // --- log helpers ---
     public synchronized int getLastLogIndex() { return log.size(); }
@@ -101,6 +119,8 @@ public class NodeState {
 
         // Update commit index
         setCommitIndex(ae.getLeaderCommit());
+
+        saveLog();//save the manual_log.txt
         return true;
     }
 
@@ -196,6 +216,7 @@ public class NodeState {
             Map<String, Object> stateMap = new HashMap<>();
             stateMap.put("currentTerm", currentTerm);
             stateMap.put("votedFor", votedFor); // may be null, safe in HashMap
+            stateMap.put("leaderId", leaderId); // persist leaderId too
 
             try (Writer writer = new FileWriter(stateFile)) {
                 gson.toJson(stateMap, writer);
@@ -229,6 +250,7 @@ public class NodeState {
                     if (data != null) {
                         currentTerm = ((Double) data.getOrDefault("currentTerm", 0.0)).intValue();
                         votedFor = (String) data.getOrDefault("votedFor", null);
+                        leaderId = (String) data.getOrDefault("leaderId", null);
                     }
                 }
             }
@@ -250,6 +272,21 @@ public class NodeState {
         }
     }
 
+    // --- Optional helper: manual log saving ---
+    public synchronized void saveLog() {
+        try {
+            File logFile = new File(storageDir, "manual_log.txt"); // separate from log.json
+            try (Writer writer = new FileWriter(logFile)) {
+                for (LogEntry entry : log) {
+                    writer.write(entry.getTerm() + ":" + entry.getCommand() + "\n");
+                }
+            }
+            System.out.println("[NodeState] Log manually saved for node " + nodeId);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public synchronized String toString() {
         return "NodeState{" +
@@ -257,6 +294,7 @@ public class NodeState {
                 ", term=" + currentTerm +
                 ", votedFor='" + votedFor + '\'' +
                 ", role=" + role +
+                ", leaderId='" + leaderId + '\'' +
                 ", logSize=" + log.size() +
                 ", commitIndex=" + commitIndex +
                 ", lastApplied=" + lastApplied +

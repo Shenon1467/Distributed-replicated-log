@@ -4,14 +4,17 @@ import com.distributedlog.messages.AppendEntries;
 import com.distributedlog.messages.AppendEntriesResponse;
 import com.distributedlog.messages.RequestVote;
 import com.distributedlog.messages.RequestVoteResponse;
+import com.distributedlog.node.NodeRole;
 import com.distributedlog.node.NodeState;
 import com.distributedlog.node.NodeTimers;
-import com.distributedlog.node.NodeRole;
 import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Collections;
 
 public class MessageServer implements Runnable {
     private final int port;
@@ -38,25 +41,47 @@ public class MessageServer implements Runnable {
                         PrintWriter out = new PrintWriter(client.getOutputStream(), true)
                 ) {
                     String message = in.readLine();
-                    if (message != null) {
-                        System.out.println("[Server " + port + "] Received: " + message);
-
-                        if (message.contains("candidateId")) {
-                            handleRequestVote(message, out);
-                        } else if (message.contains("leaderId")) {
-                            handleAppendEntries(message, out);
-                        } else {
-                            out.println("{}");
-                        }
+                    if (message != null && !message.isBlank()) {
+                        System.out.println("[Server " + port + "] Received: " + message.trim());
+                        handleIncomingMessage(message.trim(), out);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
                 } finally {
-                    try { client.close(); } catch (IOException ignored) {}
+                    try {
+                        client.close();
+                    } catch (IOException ignored) {
+                    }
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    // ------------------ Dispatch Messages ------------------
+    private void handleIncomingMessage(String message, PrintWriter out) {
+        try {
+            JsonObject json = JsonParser.parseString(message).getAsJsonObject();
+
+            if (json.has("candidateId")) {
+                handleRequestVote(message, out);
+            } else if (json.has("leaderId")) {
+                handleAppendEntries(message, out);
+            }
+            // ✅ Updated: Accept messages with "clientCommand"
+            else if (json.has("clientCommand")) {
+                handleClientCommand(json, out);
+            }
+            // ✅ Still handle leader queries
+            else if (json.has("getLeader")) {
+                handleLeaderQuery(out);
+            } else {
+                out.println("{\"status\":\"unknown_message\"}");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            out.println("{\"error\":\"invalid_json\"}");
         }
     }
 
@@ -94,31 +119,27 @@ public class MessageServer implements Runnable {
         AppendEntriesResponse resp;
 
         synchronized (nodeState) {
-            // If RPC's term is higher, update local term and become follower
             if (append.getTerm() > nodeState.getCurrentTerm()) {
                 nodeState.setCurrentTerm(append.getTerm());
                 nodeState.setVotedFor(null);
                 nodeState.setRole(NodeRole.FOLLOWER);
             }
 
-            boolean success = false;
-            int matchIndex = 0;
+            boolean success;
+            int matchIndex;
 
-            // If leader's term is older, reject quickly
             if (append.getTerm() < nodeState.getCurrentTerm()) {
                 success = false;
                 matchIndex = nodeState.getLastLogIndex();
             } else {
-                // Use NodeState's appendEntriesWithConsistency which checks prevLogIndex/prevLogTerm
                 success = nodeState.appendEntriesWithConsistency(append);
+                matchIndex = nodeState.getLastLogIndex();
+
                 if (success) {
-                    matchIndex = nodeState.getLastLogIndex();
                     nodeState.setRole(NodeRole.FOLLOWER);
-                    // Reset election timer on valid AppendEntries from leader
                     if (nodeTimers != null) nodeTimers.resetElectionTimeout();
-                } else {
-                    // conflict: keep matchIndex as last known index
-                    matchIndex = nodeState.getLastLogIndex();
+
+                    nodeState.setLeaderId(append.getLeaderId()); //track leader
                 }
             }
 
@@ -127,5 +148,45 @@ public class MessageServer implements Runnable {
         }
 
         out.println(gson.toJson(resp));
+    }
+
+    // ------------------ Handle Client Command ------------------
+    private void handleClientCommand(JsonObject json, PrintWriter out) {
+        synchronized (nodeState) {
+            // ✅ Updated: match your client’s message format
+            String command = json.has("data") ? json.get("data").getAsString() : null;
+            System.out.println("[Client->Server " + port + "] Received client command JSON: " + json);
+
+            if (command == null || command.isEmpty()) {
+                out.println("{\"status\":\"error\",\"message\":\"Empty command\"}");
+                return;
+            }
+
+            if (nodeState.getRole() != NodeRole.LEADER) {
+                String leaderId = nodeState.getLeaderId() != null ? nodeState.getLeaderId() : "unknown";
+                out.println("{\"status\":\"redirect\",\"leader\":\"" + leaderId + "\",\"message\":\"This node is not the leader\"}");
+                return;
+            }
+
+            // Append client command as a new log entry
+            nodeState.appendEntries(
+                    nodeState.getLastLogIndex(),
+                    Collections.singletonList(command),
+                    nodeState.getCurrentTerm()
+            );
+            nodeState.setCommitIndex(nodeState.getLastLogIndex());
+            nodeState.saveLog(); // ensure persistence
+
+            out.println("{\"status\":\"ok\",\"message\":\"Command committed: " + command + "\"}");
+            System.out.println("[Server " + port + "] Client command committed -> " + command);
+        }
+    }
+
+    // ------------------ Handle Leader Query ------------------
+    private void handleLeaderQuery(PrintWriter out) {
+        synchronized (nodeState) {
+            String leader = nodeState.getLeaderId() != null ? nodeState.getLeaderId() : "unknown";
+            out.println("{\"leaderId\":\"" + leader + "\"}");
+        }
     }
 }

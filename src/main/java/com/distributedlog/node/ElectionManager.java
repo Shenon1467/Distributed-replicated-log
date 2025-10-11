@@ -68,6 +68,9 @@ public class ElectionManager {
         System.out.println("[Leader] Initializing leader state for term " + nodeState.getCurrentTerm());
 
         synchronized (nodeState) {
+            //set self as leader
+            nodeState.setLeaderId(nodeState.getNodeId());
+
             int lastIndex = nodeState.getLastLogIndex();
             for (int p : peerPorts) {
                 nextIndex.put(p, lastIndex + 1);
