@@ -1,7 +1,7 @@
 
 ---
 
-## 🏗️ **ARCHITECTURE.md**
+## **ARCHITECTURE.md**
 
 markdown
 # Architectural Design Document
