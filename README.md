@@ -29,7 +29,7 @@ It maintains consistency among multiple nodes by ensuring all nodes agree on the
 
 ---
 
-## 🗂️ File Structure
+## File Structure
 
 
 ---
@@ -43,6 +43,6 @@ It maintains consistency among multiple nodes by ensuring all nodes agree on the
 4. Run ClientInterface.java separately to send client commands.
 
 ### Option 2 — Run via Command Line (Maven)
--in bash
+```in bash
 mvn clean package
 java -jar target/DistributedReplicatedLog-jar-with-deps.jar
