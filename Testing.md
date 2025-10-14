@@ -15,7 +15,7 @@ Testing focused on verifying **leader election**, **log replication**, **persist
 
 ## 3. Test Cases
 
-### ✅ Test 1: Leader Election
+### Test 1: Leader Election
 **Steps:**
 - Start main server (starts all nodes).
 - Observe leader election logs.
@@ -28,7 +28,7 @@ Node5001 became leader (term 14). Others followed.
 
 ---
 
-### ✅ Test 2: Log Replication
+### Test 2: Log Replication
 **Steps:**
 - Connect via `ClientInterface`.
 - Send:
@@ -42,11 +42,9 @@ All nodes contain identical entries.
 **Actual:**  
 [{"term":14,"command":"hi.."},{"term":14,"command":"hi..."}]
 
-appeared in all nodes.
-
 ---
 
-### ✅ Test 3: Persistence Recovery
+### Test 3: Persistence Recovery
 **Steps:**
 - Stop nodes.
 - Restart program.
@@ -60,7 +58,7 @@ Entries successfully reloaded. No data loss observed.
 
 ---
 
-### ✅ Test 4: Client Redirection
+### Test 4: Client Redirection
 **Steps:**
 - Connect to follower node via ClientInterface.
 - Issue a command.
@@ -73,7 +71,7 @@ Redirection message displayed correctly.
 
 ---
 
-### ✅ Test 5: Manual Log Verification
+### Test 5: Manual Log Verification
 **Observation:**
 - `log.json` updates correctly.
 - `manual_log.txt` not always updated (manual logging issue noted).
