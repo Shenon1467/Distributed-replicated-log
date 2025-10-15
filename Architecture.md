@@ -17,14 +17,35 @@ The system consists of multiple nodes (each representing a Raft server) that coo
 
 ```mermaid
 graph TD
-    Client --> Leader
-    Leader --> Follower1
-    Leader --> Follower2
-    Follower1 --> Leader
-    Follower2 --> Leader
-    Leader -->|Commit Entry| Client
-
+    A((Start)) --> B[Initiate Nodes]
+    B --> C[Voting Process]
+    C --> D[Client Interface]
+    D --> E[Select Port]
+    E --> F[Send Commands]
+    F --> G[Exit]
+    G --> H((End))
 ```
+Start up graph
+
+```mermaid
+graph TD
+    A((Start)) --> B[Initiate Nodes]
+    B --> C[Voting Process]
+    C --> D((End))
+```
+Client Interface
+
+```mermaid
+graph TD
+    A((Start)) --> B[Select Communication Node]
+    B --> C[Enter Commands]
+    C --> D{Leader Info?}
+    D -->|Yes| B
+    D -->|No| E{Node Infor}
+    E -->|Yes| B
+    E -->|No| F{Send command}
+```
+
 ---
 
 ## 3. Key Components
