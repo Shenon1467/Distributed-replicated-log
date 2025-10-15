@@ -15,9 +15,16 @@ The system consists of multiple nodes (each representing a Raft server) that coo
 
 ## 2. High-Level Architecture
 
+```mermaid
+graph TD
+    Client --> Leader
+    Leader --> Follower1
+    Leader --> Follower2
+    Follower1 --> Leader
+    Follower2 --> Leader
+    Leader -->|Commit Entry| Client
 
-
-
+```
 ---
 
 ## 3. Key Components
