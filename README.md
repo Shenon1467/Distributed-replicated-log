@@ -20,18 +20,65 @@ It maintains consistency among multiple nodes by ensuring all nodes agree on the
 
 | Component | Description |
 |------------|-------------|
-| MessageServer | Handles incoming RPC requests (AppendEntries, RequestVote, etc.) for each node. |
-| MessageClient | Sends requests (log entries, heartbeats, votes) between nodes. |
-| NodeState | Maintains current term, log entries, commit index, and persistent data. |
-| ElectionManager | Manages leader election timeouts and vote requests. |
-| NodeTimers | Handles periodic heartbeat and election timers. |
 | ClientInterface | Allows the user to send commands and queries to the distributed log cluster. |
+| AppendEntries | Defines the RPC message used by the leader to replicate log entries and maintain heartbeat with followers.|
+| AppendEntriesResponse | Represents follower responses indicating success or failure of log replication requests. |
+| RequestVote | Models the vote request message sent by candidates during leader election. |
+| RequestVoteResponse |	Encapsulates the follower’s response to a vote request, granting or denying the vote. |
+| MessageClient | Sends requests (log entries, heartbeats, votes) between nodes. |
+| MessageServer | Handles incoming RPC requests (AppendEntries, RequestVote, etc.) for each node. |
+| ElectionManager | Manages leader election timeouts and vote requests. |
+| LogEntry |	Represents a single command entry in the replicated log, including term and command data. |
+| NodeRole |	Enum defining possible node states — FOLLOWER, CANDIDATE, and LEADER. |
+| NodeState | Maintains current term, log entries, commit index, and persistent data. |
+| NodeTimers | Handles periodic heartbeat and election timers. |
+| Main | Launches and initializes the Raft nodes, setting up networking and timers to start the cluster. |
+| State.json | Stores critical node meta data (current term, voted for)
+| Log.json | Stores the replicated entries)
+| Manual_log.txt | For manual inspection or debugging of log entries
 
 ---
 
 ## File Structure
+```
+Distributed-Replicated-Log/
+├── data/ 
+│ ├── Node5001
+│ │ ├── log.json
+│ │ ├── manual_log.txt
+│ │ ├── state.json 
+│ ├── Node5002
+│ │ ├── log.json
+│ │ ├── manual_log.txt
+│ │ ├── state.json 
+│ ├── Node5003
+│ │ ├── log.json
+│ │ ├── manual_log.txt
+│ │ └── state.json
+├── src/
+│ ├── main/java/com/distributedlog/
+│ │ ├── client 
+│ │ │ ├── ClientInterface.java
+│ │ ├── messages
+│ │ │ ├── AppendEntries.java
+│ │ │ ├── AppendEntriesResponse.java
+│ │ │ ├── RequestVote.java
+│ │ │ ├── RequestVoteResponse.java
+│ │ ├── network
+│ │ │ ├── MessageServer.java
+│ │ │ ├── MessageClient.java
+│ │ ├── node
+│ │ │ ├── ElectionManager.java
+│ │ │ ├── LogEntry.java
+│ │ │ ├── NodeRole.java
+│ │ │ ├── NodeState.java
+│ │ └── NodeTimers.java
+│ │ ├── Main.java 
+├── README.md 
+├── pom.xml 
+└── .gitignore
 
-
+```
 ---
 
 ## How to Run
@@ -46,3 +93,4 @@ It maintains consistency among multiple nodes by ensuring all nodes agree on the
 ```in bash
 mvn clean package
 java -jar target/DistributedReplicatedLog-jar-with-deps.jar
+```
