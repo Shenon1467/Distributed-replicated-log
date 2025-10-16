@@ -91,6 +91,15 @@ Distributed-Replicated-Log/
 
 ### Option 2 — Run via Command Line (Maven)
 ```in bash
-mvn clean package
-java -jar target/DistributedReplicatedLog-jar-with-deps.jar
+1.Clean and compile the project
+mvn clean compile
+
+2.Package into a runnable JAR (includes dependencies)
+mvn package
+
+3.Run the Raft node cluster (Main class)
+mvn exec:java -Dexec.mainClass="com.distributedlog.Main"
+
+4.Run the client interface in a separate terminal
+mvn exec:java -Dexec.mainClass="com.distributedlog.client.ClientInterface"
 ```

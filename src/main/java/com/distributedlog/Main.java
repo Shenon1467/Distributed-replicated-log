@@ -34,7 +34,7 @@ public class Main {
             try { Thread.sleep(500); } catch (InterruptedException ignored) {}
         }
 
-        // --- Optional: simulate external messages (Phase 1 RPC test) ---
+        // --- Optional: simulate external messages ---
         try {
             Thread.sleep(2000); // wait for servers to start
             RequestVote vote = new RequestVote(1, "NodeA");

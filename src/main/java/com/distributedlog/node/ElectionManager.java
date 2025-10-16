@@ -25,7 +25,7 @@ public class ElectionManager {
         this.peerPorts = peerPorts;
     }
 
-    // --- Election (unchanged) ---
+    // --- Election ---
     public void startElection() {
         synchronized (nodeState) {
             nodeState.incrementTerm();

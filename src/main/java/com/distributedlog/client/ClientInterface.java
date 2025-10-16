@@ -13,7 +13,7 @@ public class ClientInterface {
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
 
-        System.out.print("Enter node host (default: localhost): ");
+        System.out.print("Press enter to connect to server: ");
         String host = scanner.nextLine().trim();
         if (host.isEmpty()) host = "localhost";
 
@@ -21,7 +21,7 @@ public class ClientInterface {
         int currentLeaderPort = Integer.parseInt(scanner.nextLine().trim());
 
         System.out.println("\n Connected to Raft Node " + host + ":" + currentLeaderPort);
-        System.out.println("Commands:");
+        System.out.println("Use below Commands:");
         System.out.println(" 1. Send [Logs]           → send command to the leader following the followers");
         System.out.println(" 2. Leader                → get leader info of this node");
         System.out.println(" 3. Nodes information     → get leader info of all nodes");

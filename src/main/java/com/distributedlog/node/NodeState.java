@@ -13,7 +13,7 @@ import java.util.*;
  * Log uses 1-based indexing semantics: first entry has index 1; log.size() is last index.
  * Also tracks leader replication state (nextIndex, matchIndex) for log replication.
  *
- * Now includes persistence support (Component 8) and leader tracking for client redirection.
+ * Now includes persistence support and leader tracking for client redirection.
  */
 public class NodeState {
     private final String nodeId;       // Unique ID of this node
@@ -36,7 +36,6 @@ public class NodeState {
     // --- Persistence ---
     private final File storageDir;
 
-    // --- Constructor (nodeId required) ---
     public NodeState(String nodeId) {
         this.nodeId = nodeId;
 
@@ -215,7 +214,7 @@ public class NodeState {
             File stateFile = new File(storageDir, "state.json");
             Map<String, Object> stateMap = new HashMap<>();
             stateMap.put("currentTerm", currentTerm);
-            stateMap.put("votedFor", votedFor); // may be null, safe in HashMap
+            stateMap.put("votedFor", votedFor);
             stateMap.put("leaderId", leaderId); // persist leaderId too
 
             try (Writer writer = new FileWriter(stateFile)) {
@@ -272,7 +271,7 @@ public class NodeState {
         }
     }
 
-    // --- Optional helper: manual log saving ---
+    // --- manual log saving ---
     public synchronized void saveLog() {
         try {
             File logFile = new File(storageDir, "manual_log.txt"); // separate from log.json

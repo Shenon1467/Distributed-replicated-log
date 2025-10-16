@@ -69,11 +69,11 @@ public class MessageServer implements Runnable {
             } else if (json.has("leaderId")) {
                 handleAppendEntries(message, out);
             }
-            // ✅ Updated: Accept messages with "clientCommand"
+            // Accept messages with "clientCommand"
             else if (json.has("clientCommand")) {
                 handleClientCommand(json, out);
             }
-            // ✅ Still handle leader queries
+            // Handle leader queries
             else if (json.has("getLeader")) {
                 handleLeaderQuery(out);
             } else {
@@ -153,7 +153,7 @@ public class MessageServer implements Runnable {
     // ------------------ Handle Client Command ------------------
     private void handleClientCommand(JsonObject json, PrintWriter out) {
         synchronized (nodeState) {
-            // ✅ Updated: match your client’s message format
+            // match your client’s message format
             String command = json.has("data") ? json.get("data").getAsString() : null;
             System.out.println("[Client->Server " + port + "] Received client command JSON: " + json);
 
