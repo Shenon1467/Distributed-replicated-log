@@ -33,17 +33,23 @@ graph TD
     B --> C[Voting Process]
     C --> D((End))
 ```
-Client Interface
+Client Interface graph
 
 ```mermaid
 graph TD
     A((Start)) --> B[Select Communication Node]
     B --> C[Enter Commands]
     C --> D{Leader Info?}
-    D -->|Yes| B
-    D -->|No| E{Node Infor}
-    E -->|Yes| B
-    E -->|No| F{Send command}
+    D -->|Yes| E[Display Lader info]
+    D -->|No| F{Nodes info}
+    E --> C
+    F -->|Yes| G[Display Nodes info]
+    F -->|No| H{Send Logs}
+    G --> C
+    H -->|Yes| I[Send Logs]
+    I --> C
+    H -->|No| J((End))
+  
 ```
 
 ---
@@ -52,13 +58,19 @@ graph TD
 
 | Component | Responsibility |
 |------------|----------------|
-| **MessageServer** | Listens for incoming RPC messages (RequestVote, AppendEntries). |
-| **MessageClient** | Sends RPCs between nodes asynchronously. |
-| **NodeState** | Stores term, votedFor, log entries, commit index, leaderId, etc. Persisted to disk. |
-| **ElectionManager** | Handles election timeout and leader selection using randomized timers. |
-| **NodeTimers** | Manages periodic heartbeat sending by the leader and triggers elections. |
-| **ClientInterface** | Interacts with the user. Sends requests and displays results. |
-
+| ClientInterface | Interacts with the user. Sends requests and displays results. |
+| AppendEntries | Defines the structure and data of AppendEntries RPC requests sent by the leader to followers for log replication. |
+| AppendEntriesResponse | Represents the follower’s reply to an AppendEntries RPC, indicating success or failure of log replication. |
+| RequestVote | Encapsulates the data for vote requests during leader election, including candidate ID and term. |
+| RequestVoteResponse | Represents a node’s response to a vote request, indicating whether the vote was granted. |
+| MessageServer | Listens for incoming RPC messages (RequestVote, AppendEntries). |
+| MessageClient | Sends RPCs between nodes asynchronously. |
+| ElectionManager | Handles election timeout and leader selection using randomized timers. |
+| LogEntry | Defines a single log entry containing a term number and command for replication across nodes. |
+| NodeRole | Enumerates the possible roles of a node in the Raft cluster — Leader, Follower, or Candidate. |
+| NodeState | Stores term, votedFor, log entries, commit index, leaderId, etc. Persisted to disk. |
+| NodeTimers | Manages periodic heartbeat sending by the leader and triggers elections. |
+| Main | Launches the Raft node, initializes components, and starts network listeners and election timers. |
 ---
 
 ## 4. Data Persistence
