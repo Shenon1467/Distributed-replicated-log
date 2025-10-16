@@ -17,26 +17,26 @@ public class ClientInterface {
         String host = scanner.nextLine().trim();
         if (host.isEmpty()) host = "localhost";
 
-        System.out.print("Enter node port (e.g., 5001, 5002, 5003): ");
+        System.out.print("Enter node port (5001, 5002, 5003): ");
         int currentLeaderPort = Integer.parseInt(scanner.nextLine().trim());
 
-        System.out.println("\n✅ Connected to Raft Node " + host + ":" + currentLeaderPort);
+        System.out.println("\n Connected to Raft Node " + host + ":" + currentLeaderPort);
         System.out.println("Commands:");
-        System.out.println(" 1. send <key=value>   → append command");
-        System.out.println(" 2. leader             → get leader info of this node");
-        System.out.println(" 3. leader-all         → get leader info of all nodes");
-        System.out.println(" 4. exit               → quit client\n");
+        System.out.println(" 1. Send [Logs]           → send command to the leader following the followers");
+        System.out.println(" 2. Leader                → get leader info of this node");
+        System.out.println(" 3. Nodes information     → get leader info of all nodes");
+        System.out.println(" 4. Exit                  → quit client\n");
 
         while (true) {
             System.out.print("> ");
             String input = scanner.nextLine().trim();
 
             if (input.equalsIgnoreCase("exit")) {
-                System.out.println("👋 Exiting client...");
+                System.out.println(" Exiting client...");
                 break;
             } else if (input.equalsIgnoreCase("leader")) {
                 sendMessage(host, currentLeaderPort, gson.toJson(new LeaderQuery()));
-            } else if (input.equalsIgnoreCase("leader-all")) {
+            } else if (input.equalsIgnoreCase("nodes information")) {
                 for (int port = 5001; port <= 5003; port++) {
                     sendMessage(host, port, gson.toJson(new LeaderQuery()), port);
                 }
@@ -45,7 +45,7 @@ public class ClientInterface {
                 ClientCommand msg = new ClientCommand("set", command);
                 currentLeaderPort = sendCommandWithRedirect(host, currentLeaderPort, msg);
             } else {
-                System.out.println("⚠️  Unknown command. Use 'send <key=value>' or 'leader'");
+                System.out.println("Unknown command. Use 'send [log]' or 'leader' or 'nodes information'");
             }
         }
 
@@ -62,12 +62,12 @@ public class ClientInterface {
                         && json.has("leader")) {
                     String leaderId = json.get("leader").getAsString();
                     int leaderPort = extractPortFromLeaderId(leaderId);
-                    System.out.println("🔄 Redirecting to leader " + leaderId + " on port " + leaderPort);
+                    System.out.println(" Redirecting to leader " + leaderId + " on port " + leaderPort);
                     return sendCommandWithRedirect(host, leaderPort, msg); // resend
                 }
             }
         } catch (Exception e) {
-            System.out.println("❌ Error sending command: " + e.getMessage());
+            System.out.println(" Error sending command: " + e.getMessage());
         }
         return port; // return port used (leader or self)
     }
@@ -84,10 +84,10 @@ public class ClientInterface {
         ) {
             out.println(jsonMessage);
             String response = in.readLine();
-            System.out.println("📩 Node " + nodePort + " -> Response: " + response);
+            System.out.println(" Node " + nodePort + " -> Response: " + response);
             return response;
         } catch (IOException e) {
-            System.out.println("❌ Could not connect to node " + nodePort + ": " + e.getMessage());
+            System.out.println(" Could not connect to node " + nodePort + ": " + e.getMessage());
         }
         return null;
     }
