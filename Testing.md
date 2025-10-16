@@ -9,7 +9,7 @@ Testing focused on verifying **leader election**, **log replication**, **persist
 - Java 17
 - IntelliJ IDEA / Terminal
 - Ports: 5001, 5002, 5003
-- Each node stores data in `/data/Node<port>/`
+- Each node stores data in `/data/Node<port>/`(Eg:- data/Node5001/)
 
 ---
 
@@ -74,18 +74,42 @@ Redirection message displayed correctly.
 ### Test 5: Manual Log Verification
 **Observation:**
 - `log.json` updates correctly.
-- `manual_log.txt` not always updated (manual logging issue noted).
+- `manual_log.txt` always updates automatically as txt.
 
 **Conclusion:**  
 Persistence correctness validated via JSON logs.
 
 ---
 
+### Test 6: Command input
+**Observation:**
+- If the client input any unknown commands or wrong commands.
+
+**Expected:**
+An error message should appear displaying unknown commad.
+
+**Actual:**  
+When client inputs unknown commands an error message is displayed.
+
+---
+
+### Test 7: Nodes disconnected or inactive
+**Observation:**
+- If the nodes are inactive or disconnected.
+
+**Expected:**  
+Display message node couldn't be connected.
+
+**Actual:**
+A message is displayed displaying could not connect to node.
+
 ## 4. Summary
 | Test | Objective | Result |
 |------|------------|--------|
-| Leader Election | Ensure only one leader per term | ✅ Passed |
-| Log Replication | Entries replicated consistently | ✅ Passed |
-| Persistence | No data loss after restart | ✅ Passed |
-| Redirection | Client redirected to leader | ✅ Passed |
-| Manual Log | Secondary log file sync | ⚠️ Partial |
+| Leader Election | Ensure only one leader per term | Passed |
+| Log Replication | Entries replicated consistently | Passed |
+| Persistence | No data loss after restart | Passed |
+| Redirection | Client redirected to leader | Passed |
+| Manual Log | Secondary log file sync | Passed |
+| Command input | Display error message for unknown commands | Passed |
+| Node inactive | Display error message when nodea are disconnected | Passed |
