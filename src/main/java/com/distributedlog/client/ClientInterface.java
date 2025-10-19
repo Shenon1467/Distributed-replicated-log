@@ -52,7 +52,7 @@ public class ClientInterface {
         scanner.close();
     }
 
-    // Sends a command and handles redirect automatically
+    /**Sends command and handles the redirects automatically**/
     private static int sendCommandWithRedirect(String host, int port, ClientCommand msg) {
         try {
             String response = sendMessage(host, port, gson.toJson(msg));
@@ -72,7 +72,7 @@ public class ClientInterface {
         return port; // return port used (leader or self)
     }
 
-    // Sends a message to a node and returns the response
+    /**Sends messages to a node and returns the response**/
     private static String sendMessage(String host, int port, String jsonMessage) {
         return sendMessage(host, port, jsonMessage, port);
     }
@@ -92,7 +92,7 @@ public class ClientInterface {
         return null;
     }
 
-    // Convert leaderId like "Leader5002" or "Node5002" to port number
+    /**Converts the leaderID to port number**/
     private static int extractPortFromLeaderId(String leaderId) {
         return Integer.parseInt(leaderId.replaceAll("\\D+", ""));
     }

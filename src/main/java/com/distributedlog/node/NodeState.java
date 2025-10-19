@@ -16,42 +16,40 @@ import java.util.*;
  * Now includes persistence support and leader tracking for client redirection.
  */
 public class NodeState {
-    private final String nodeId;       // Unique ID of this node
+    private final String nodeId;       /**Unique ID of a node*/
     private int currentTerm = 0;
     private String votedFor = null;
     private NodeRole role = NodeRole.FOLLOWER;
 
-    // --- Leader tracking ---
-    private String leaderId = null;    // current leader of the cluster
+    /**Leader tracking*/
+    private String leaderId = null;
 
-    // Log + replication state
+    /**Log and replication state*/
     private final List<LogEntry> log = new ArrayList<>();
     private int commitIndex = 0;
     private int lastApplied = 0;
 
-    // Leader replication tracking
+    /**Leader replication track*/
     private final Map<String, Integer> nextIndex = new HashMap<>();
     private final Map<String, Integer> matchIndex = new HashMap<>();
 
-    // --- Persistence ---
+    /**Persistence*/
     private final File storageDir;
 
     public NodeState(String nodeId) {
         this.nodeId = nodeId;
 
-        // Persistence setup
+        /
         this.storageDir = new File("data/" + nodeId);
         if (!storageDir.exists()) storageDir.mkdirs();
 
-        loadState(); // Try to load state from disk
+        loadState();
     }
 
-    // --- Node ID accessor ---
     public synchronized String getNodeId() {
         return nodeId;
     }
 
-    // --- term / role / vote accessors ---
     public synchronized int getCurrentTerm() { return currentTerm; }
     public synchronized void setCurrentTerm(int term) {
         this.currentTerm = term;
@@ -76,7 +74,6 @@ public class NodeState {
         saveState();
     }
 
-    // --- Leader accessors ---
     public synchronized String getLeaderId() {
         return leaderId;
     }
@@ -84,7 +81,6 @@ public class NodeState {
         this.leaderId = leaderId;
     }
 
-    // --- log helpers ---
     public synchronized int getLastLogIndex() { return log.size(); }
     public synchronized int getLastLogTerm() { return log.isEmpty() ? 0 : log.get(log.size() - 1).getTerm(); }
 
@@ -103,23 +99,23 @@ public class NodeState {
         return out;
     }
 
-    // --- AppendEntries for followers with consistency check ---
+    /**AppendEntries for followers with the consistency check*/
     public synchronized boolean appendEntriesWithConsistency(AppendEntries ae) {
         int prevLogIndex = ae.getPrevLogIndex();
         int prevLogTerm = ae.getPrevLogTerm();
 
-        // Conflict detection
+        /**Detects comflicts*/
         if (prevLogIndex > 0 && getTermAtIndex(prevLogIndex) != prevLogTerm) {
             return false;
         }
 
-        // Append / overwrite entries
+        /**Append and overwrite the entries*/
         appendEntries(prevLogIndex, ae.getEntries(), ae.getTerm());
 
-        // Update commit index
+        /**Commit index updated*/
         setCommitIndex(ae.getLeaderCommit());
 
-        saveLog();//save the manual_log.txt
+        saveLog();
         return true;
     }
 
@@ -127,24 +123,23 @@ public class NodeState {
         int currentSize = log.size();
         int expectedNextIndex = prevLogIndex + 1;
 
-        // Remove conflicting entries
+        /**Remove the conflicting entries*/
         if (expectedNextIndex <= currentSize) {
             for (int i = currentSize; i >= expectedNextIndex; i--) {
                 log.remove(i - 1);
             }
         }
 
-        // Append new entries
+        /**Append the new entries*/
         if (entries != null) {
             for (String cmd : entries) {
                 log.add(new LogEntry(termOfEntry, cmd));
             }
         }
 
-        saveState(); // Persist new log entries
+        saveState();
     }
 
-    // --- commit / apply logic ---
     public synchronized int getCommitIndex() { return commitIndex; }
     public synchronized void setCommitIndex(int newCommitIndex) {
         if (newCommitIndex > commitIndex) {
@@ -162,7 +157,6 @@ public class NodeState {
         }
     }
 
-    // --- Leader replication state helpers ---
     public synchronized void initLeaderState(List<String> allNodeIds) {
         int next = getLastLogIndex() + 1;
         nextIndex.clear();
@@ -205,23 +199,23 @@ public class NodeState {
         }
     }
 
-    // --- Persistence Methods ---
+    /**Persistence methods*/
     private synchronized void saveState() {
         try {
             Gson gson = new Gson();
 
-            // Save metadata safely (allow nulls)
+            /**Saves metadata safely*/
             File stateFile = new File(storageDir, "state.json");
             Map<String, Object> stateMap = new HashMap<>();
             stateMap.put("currentTerm", currentTerm);
             stateMap.put("votedFor", votedFor);
-            stateMap.put("leaderId", leaderId); // persist leaderId too
+            stateMap.put("leaderId", leaderId);
 
             try (Writer writer = new FileWriter(stateFile)) {
                 gson.toJson(stateMap, writer);
             }
 
-            // Save log
+            /**Save logs*/
             File logFile = new File(storageDir, "log.json");
             try (Writer writer = new FileWriter(logFile)) {
                 gson.toJson(log, writer);
@@ -238,14 +232,14 @@ public class NodeState {
         try {
             Gson gson = new Gson();
 
-            // Load metadata
+            /**Load the meta data*/
             File stateFile = new File(storageDir, "state.json");
             if (stateFile.exists()) {
                 try (Reader reader = new FileReader(stateFile)) {
                     Type type = new TypeToken<Map<String, Object>>() {}.getType();
                     Map<String, Object> data = gson.fromJson(reader, type);
 
-                    // Check for null (empty file)
+                    /**Check for nulls*/
                     if (data != null) {
                         currentTerm = ((Double) data.getOrDefault("currentTerm", 0.0)).intValue();
                         votedFor = (String) data.getOrDefault("votedFor", null);
@@ -254,7 +248,6 @@ public class NodeState {
                 }
             }
 
-            // Load log
             File logFile = new File(storageDir, "log.json");
             if (logFile.exists()) {
                 try (Reader reader = new FileReader(logFile)) {
@@ -271,7 +264,7 @@ public class NodeState {
         }
     }
 
-    // --- manual log saving ---
+    /**Saving lgs to the manual_log.txt file*/
     public synchronized void saveLog() {
         try {
             File logFile = new File(storageDir, "manual_log.txt"); // separate from log.json

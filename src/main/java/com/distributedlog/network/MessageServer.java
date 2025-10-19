@@ -59,7 +59,6 @@ public class MessageServer implements Runnable {
         }
     }
 
-    // ------------------ Dispatch Messages ------------------
     private void handleIncomingMessage(String message, PrintWriter out) {
         try {
             JsonObject json = JsonParser.parseString(message).getAsJsonObject();
@@ -69,11 +68,10 @@ public class MessageServer implements Runnable {
             } else if (json.has("leaderId")) {
                 handleAppendEntries(message, out);
             }
-            // Accept messages with "clientCommand"
+            /**Meessages accepted with client command*/
             else if (json.has("clientCommand")) {
                 handleClientCommand(json, out);
             }
-            // Handle leader queries
             else if (json.has("getLeader")) {
                 handleLeaderQuery(out);
             } else {
@@ -85,7 +83,7 @@ public class MessageServer implements Runnable {
         }
     }
 
-    // ------------------ Handle RequestVote RPC ------------------
+    /**Handles the RequestVote RPC*/
     private void handleRequestVote(String message, PrintWriter out) {
         RequestVote vote = gson.fromJson(message, RequestVote.class);
         RequestVoteResponse resp;
@@ -113,7 +111,7 @@ public class MessageServer implements Runnable {
         out.println(gson.toJson(resp));
     }
 
-    // ------------------ Handle AppendEntries RPC ------------------
+    /**Handles the AppendEntries RPC*/
     private void handleAppendEntries(String message, PrintWriter out) {
         AppendEntries append = gson.fromJson(message, AppendEntries.class);
         AppendEntriesResponse resp;
@@ -150,7 +148,7 @@ public class MessageServer implements Runnable {
         out.println(gson.toJson(resp));
     }
 
-    // ------------------ Handle Client Command ------------------
+    /**Handles the client command*/
     private void handleClientCommand(JsonObject json, PrintWriter out) {
         synchronized (nodeState) {
             // match your client’s message format
@@ -182,7 +180,7 @@ public class MessageServer implements Runnable {
         }
     }
 
-    // ------------------ Handle Leader Query ------------------
+    /**Handles the leader information*/
     private void handleLeaderQuery(PrintWriter out) {
         synchronized (nodeState) {
             String leader = nodeState.getLeaderId() != null ? nodeState.getLeaderId() : "unknown";

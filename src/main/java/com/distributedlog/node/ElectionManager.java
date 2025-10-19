@@ -25,7 +25,6 @@ public class ElectionManager {
         this.peerPorts = peerPorts;
     }
 
-    // --- Election ---
     public void startElection() {
         synchronized (nodeState) {
             nodeState.incrementTerm();
@@ -63,7 +62,7 @@ public class ElectionManager {
         }
     }
 
-    // Called when candidate becomes leader
+    /**Called when the candidate becomes a leader*/
     private void becomeLeader() {
         System.out.println("[Leader] Initializing leader state for term " + nodeState.getCurrentTerm());
 
@@ -89,9 +88,9 @@ public class ElectionManager {
         leaderScheduler.scheduleAtFixedRate(this::sendHeartbeatsAndReplicate, 0, 500, TimeUnit.MILLISECONDS);
     }
 
-    /** Heartbeat + replication loop */
+    /** Heartbeat and the replication loop */
     private void sendHeartbeatsAndReplicate() {
-        // for each peer send AppendEntries that may contain entries (if leader has new ones)
+        /**for each peer send AppendEntries that may contain entries (if leader has new ones)*/
         for (int peer : peerPorts) {
             CompletableFuture.runAsync(() -> sendAppendEntriesToPeer(peer));
         }
@@ -108,7 +107,6 @@ public class ElectionManager {
             prevTerm = nodeState.getTermAtIndex(prevIndex);
             int lastIndex = nodeState.getLastLogIndex();
             if (nextIdx <= lastIndex) {
-                // send entries from nextIdx..lastIndex
                 entriesToSend = nodeState.getCommandsFromTo(nextIdx, lastIndex);
             }
             leaderCommit = nodeState.getCommitIndex();
@@ -128,7 +126,7 @@ public class ElectionManager {
             AppendEntriesResponse resp = new Gson().fromJson(respJson, AppendEntriesResponse.class);
 
             synchronized (nodeState) {
-                // If follower has higher term, step down
+                /**Step down follower term if it has a higher term*/
                 if (resp.getTerm() > nodeState.getCurrentTerm()) {
                     nodeState.setCurrentTerm(resp.getTerm());
                     nodeState.setRole(NodeRole.FOLLOWER);
@@ -141,12 +139,10 @@ public class ElectionManager {
                     nextIndex.put(peerPort, matched + 1);
                     matchIndex.put(peerPort, matched);
                 } else {
-                    // follower rejected — decrement nextIndex (backoff) and retry later
                     int ni = Math.max(1, nextIndex.getOrDefault(peerPort, 1) - 1);
                     nextIndex.put(peerPort, ni);
                 }
 
-                // Try to advance commit index (basic majority check)
                 tryAdvanceCommitIndex();
             }
         } catch (Exception e) {
@@ -163,20 +159,18 @@ public class ElectionManager {
 
         for (int N = lastIndex; N > nodeState.getCommitIndex(); N--) {
             final int target = N;
-            int count = 1; // leader itself
+            int count = 1;
             for (int p : peerPorts) {
                 int mk = matchIndex.getOrDefault(p, 0);
                 if (mk >= target) count++;
             }
 
             if (count >= majority) {
-                // ensure entry at N was created in current term (safety)
                 int termAtN;
                 synchronized (nodeState) {
                     termAtN = nodeState.getTermAtIndex(target);
                 }
                 if (termAtN == nodeState.getCurrentTerm()) {
-                    // advance commit index
                     System.out.println("[Leader] Advancing commitIndex to " + target);
                     nodeState.setCommitIndex(target);
                     break;
@@ -192,7 +186,7 @@ public class ElectionManager {
         }
     }
 
-    /** Called by external client to append a new command to leader's log */
+    /** Called by the client to append a new command to the leader's log */
     public void appendCommandAsLeader(String command) {
         synchronized (nodeState) {
             int term = nodeState.getCurrentTerm();

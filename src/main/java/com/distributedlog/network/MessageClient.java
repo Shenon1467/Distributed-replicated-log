@@ -8,21 +8,21 @@ import java.net.Socket;
 public class MessageClient {
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    // Send a message object as JSON and return the JSON response
+    /**Send message object as a JSON and return the JSON response*/
     public static String sendMessage(String host, int port, Object messageObject) {
         try (Socket socket = new Socket(host, port);
              BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
              BufferedReader reader = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
 
-            // Convert object to JSON
+            /**Converts the object to JSOn*/
             String json = objectMapper.writeValueAsString(messageObject);
 
-            // Send message
+            /**Send message*/
             writer.write(json);
             writer.newLine();
             writer.flush();
 
-            // Read response
+            /**Read reponse*/
             return reader.readLine();
 
         } catch (IOException e) {

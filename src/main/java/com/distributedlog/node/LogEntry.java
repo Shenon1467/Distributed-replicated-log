@@ -1,8 +1,6 @@
 package com.distributedlog.node;
 
-/**
- * Simple log entry: stores term and command.
- * We don't store explicit index here because NodeState treats log index as position (1-based).
+/** A simple log entry that stores the term and command and we don't store explicit index here because NodeState treats log index as position (1-based).
  */
 public class LogEntry {
     private final int term;

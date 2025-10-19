@@ -3,14 +3,13 @@ package com.distributedlog.messages;
 import java.util.List;
 
 public class AppendEntries {
-    private int term;                // Leader’s term
-    private String leaderId;         // So follower can redirect clients
-    private int prevLogIndex;        // Index of log entry immediately preceding new ones
-    private int prevLogTerm;         // Term of prevLogIndex entry
-    private List<String> entries;    // Log entries to store (empty for heartbeat)
-    private int leaderCommit;        // Leader’s commit index
+    private int term;
+    private String leaderId;
+    private int prevLogIndex;
+    private int prevLogTerm;
+    private List<String> entries;
+    private int leaderCommit;
 
-    // Full constructor (Phase 3)
     public AppendEntries(int term, String leaderId, int prevLogIndex, int prevLogTerm,
                          List<String> entries, int leaderCommit) {
         this.term = term;
@@ -21,12 +20,10 @@ public class AppendEntries {
         this.leaderCommit = leaderCommit;
     }
 
-    // Minimal constructor (backward compatibility)
     public AppendEntries(int term, String leaderId) {
         this(term, leaderId, 0, 0, null, 0);
     }
 
-    // ---------- Getters ----------
     public int getTerm() { return term; }
     public String getLeaderId() { return leaderId; }
     public int getPrevLogIndex() { return prevLogIndex; }
@@ -34,7 +31,6 @@ public class AppendEntries {
     public List<String> getEntries() { return entries; }
     public int getLeaderCommit() { return leaderCommit; }
 
-    // ---------- Setters ----------
     public void setTerm(int term) { this.term = term; }
     public void setLeaderId(String leaderId) { this.leaderId = leaderId; }
     public void setPrevLogIndex(int prevLogIndex) { this.prevLogIndex = prevLogIndex; }

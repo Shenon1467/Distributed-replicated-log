@@ -11,30 +11,31 @@ import java.util.List;
 
 public class Main {
     public static void main(String[] args) {
-        // --- Node configuration ---
         List<Integer> nodePorts = Arrays.asList(5001, 5002, 5003);
 
         for (int port : nodePorts) {
-            // Determine peer ports (all ports except this node)
+            /**Detremine peer nodes except this node**/
             List<Integer> peers = nodePorts.stream().filter(p -> p != port).toList();
 
-            // Create NodeState, ElectionManager, NodeTimers for each node
+            /**Creates nodetimer, electionmanager and nodestate for each node**/
             NodeState nodeState = new NodeState("Node" + port);
             ElectionManager electionManager = new ElectionManager(nodeState, port, peers);
             NodeTimers nodeTimers = new NodeTimers(nodeState, electionManager);
 
-            // Start MessageServer for this node
+            /**Start message server for the node**/
             MessageServer server = new MessageServer(port, nodeState, nodeTimers);
             new Thread(server).start();
 
-            // Start election timer for this node
+            /**Start election time for the node**/
             nodeTimers.startElectionTimer();
 
-            // Small delay to avoid simultaneous startup collisions
+            /**Small delays to avoid startup collisions**/
+
             try { Thread.sleep(500); } catch (InterruptedException ignored) {}
         }
 
-        // --- Optional: simulate external messages ---
+        /**Simulates external messages**/
+
         try {
             Thread.sleep(2000); // wait for servers to start
             RequestVote vote = new RequestVote(1, "NodeA");
